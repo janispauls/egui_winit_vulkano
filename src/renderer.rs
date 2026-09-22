@@ -9,8 +9,12 @@
 
 use std::sync::Arc;
 
-use ahash::AHashMap;
-use egui::{epaint::Primitive, ClippedPrimitive, PaintCallbackInfo, Rect, TexturesDelta};
+use ahash::{AHashMap, HashMap};
+use egui::{
+    epaint::{ImageDelta, Primitive},
+    ClippedPrimitive, PaintCallbackInfo, Rect, TexturesDelta,
+};
+use smallvec::SmallVec;
 use vulkano::{
     buffer::{
         allocator::{SubbufferAllocator, SubbufferAllocatorCreateInfo},
@@ -174,22 +178,27 @@ impl Renderer {
             // final_output_format.type_color().unwrap() == NumericType::SRGB;
             final_output_format.numeric_format_color().unwrap() == NumericFormat::SRGB;
         let allocators = Allocators::new_default(gfx_queue.device());
-        let vertex_index_buffer_pool =
-            SubbufferAllocator::new(allocators.memory.clone(), SubbufferAllocatorCreateInfo {
+        let vertex_index_buffer_pool = SubbufferAllocator::new(
+            allocators.memory.clone(),
+            SubbufferAllocatorCreateInfo {
                 arena_size: INDEX_BUFFER_SIZE + VERTEX_BUFFER_SIZE,
                 buffer_usage: BufferUsage::INDEX_BUFFER | BufferUsage::VERTEX_BUFFER,
                 memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
-            });
+            },
+        );
         let pipeline = Self::create_pipeline(gfx_queue.clone(), subpass.clone());
-        let font_sampler = Sampler::new(gfx_queue.device().clone(), SamplerCreateInfo {
-            mag_filter: Filter::Linear,
-            min_filter: Filter::Linear,
-            address_mode: [SamplerAddressMode::ClampToEdge; 3],
-            mipmap_mode: SamplerMipmapMode::Linear,
-            ..Default::default()
-        })
+        let font_sampler = Sampler::new(
+            gfx_queue.device().clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::ClampToEdge; 3],
+                mipmap_mode: SamplerMipmapMode::Linear,
+                ..Default::default()
+            },
+        )
         .unwrap();
         let font_format = Self::choose_font_format(gfx_queue.device());
         Renderer {
@@ -268,22 +277,28 @@ impl Renderer {
         )
         .unwrap();
 
-        GraphicsPipeline::new(gfx_queue.device().clone(), None, GraphicsPipelineCreateInfo {
-            stages: stages.into_iter().collect(),
-            vertex_input_state,
-            input_assembly_state: Some(InputAssemblyState::default()),
-            viewport_state: Some(ViewportState::default()),
-            rasterization_state: Some(RasterizationState::default()),
-            multisample_state: Some(MultisampleState {
-                rasterization_samples: subpass.num_samples().unwrap_or(SampleCount::Sample1),
-                ..Default::default()
-            }),
-            color_blend_state: Some(blend_state),
-            depth_stencil_state,
-            dynamic_state: [DynamicState::Viewport, DynamicState::Scissor].into_iter().collect(),
-            subpass: Some(subpass.into()),
-            ..GraphicsPipelineCreateInfo::layout(layout)
-        })
+        GraphicsPipeline::new(
+            gfx_queue.device().clone(),
+            None,
+            GraphicsPipelineCreateInfo {
+                stages: stages.into_iter().collect(),
+                vertex_input_state,
+                input_assembly_state: Some(InputAssemblyState::default()),
+                viewport_state: Some(ViewportState::default()),
+                rasterization_state: Some(RasterizationState::default()),
+                multisample_state: Some(MultisampleState {
+                    rasterization_samples: subpass.num_samples().unwrap_or(SampleCount::Sample1),
+                    ..Default::default()
+                }),
+                color_blend_state: Some(blend_state),
+                depth_stencil_state,
+                dynamic_state: [DynamicState::Viewport, DynamicState::Scissor]
+                    .into_iter()
+                    .collect(),
+                subpass: Some(subpass.into()),
+                ..GraphicsPipelineCreateInfo::layout(layout)
+            },
+        )
         .unwrap()
     }
 
@@ -354,56 +369,56 @@ impl Renderer {
         }
     }
     /// Based on self.font_format, extract into bytes.
-    fn pack_font_data_into(&self, data: &egui::FontImage, into: &mut [u8]) {
-        match self.font_format {
-            Format::R8G8_UNORM => {
-                // Egui expects RGB to be linear in shader, but alpha to be *nonlinear.*
-                // Thus, we use R channel for linear coverage, G for the same coverage converted to nonlinear.
-                // Then gets swizzled up to RRRG to match expected values.
-                let linear =
-                    data.pixels.iter().map(|f| (f.clamp(0.0, 1.0 - f32::EPSILON) * 256.0) as u8);
-                let bytes = linear
-                    .zip(data.srgba_pixels(None))
-                    .flat_map(|(linear, srgb)| [linear, srgb.a()]);
-
-                into.iter_mut().zip(bytes).for_each(|(into, from)| *into = from);
-            }
-            Format::R8G8B8A8_SRGB => {
-                // No special tricks, pack them directly.
-                let bytes = data.srgba_pixels(None).flat_map(|color| color.to_array());
-                into.iter_mut().zip(bytes).for_each(|(into, from)| *into = from);
-            }
-            // This is the exhaustive list of choosable font formats.
-            _ => unreachable!(),
-        }
-    }
-    fn image_size_bytes(&self, delta: &egui::epaint::ImageDelta) -> usize {
-        match &delta.image {
+    // fn pack_font_data_into(&self, data: &egui::FontImage, into: &mut [u8]) {
+    //     match self.font_format {
+    //         Format::R8G8_UNORM => {
+    //             // Egui expects RGB to be linear in shader, but alpha to be *nonlinear.*
+    //             // Thus, we use R channel for linear coverage, G for the same coverage converted to nonlinear.
+    //             // Then gets swizzled up to RRRG to match expected values.
+    //             let linear =
+    //                 data.pixels.iter().map(|f| (f.clamp(0.0, 1.0 - f32::EPSILON) * 256.0) as u8);
+    //             let bytes = linear
+    //                 .zip(data.srgba_pixels(None))
+    //                 .flat_map(|(linear, srgb)| [linear, srgb.a()]);
+    //
+    //             into.iter_mut().zip(bytes).for_each(|(into, from)| *into = from);
+    //         }
+    //         Format::R8G8B8A8_SRGB => {
+    //             // No special tricks, pack them directly.
+    //             let bytes = data.srgba_pixels(None).flat_map(|color| color.to_array());
+    //             into.iter_mut().zip(bytes).for_each(|(into, from)| *into = from);
+    //         }
+    //         // This is the exhaustive list of choosable font formats.
+    //         _ => unreachable!(),
+    //     }
+    // }
+    fn image_size_bytes(&self, delta: &SmallVec<[ImageDelta; 1]>) -> usize {
+        match &delta.first().unwrap().image {
             egui::ImageData::Color(c) => {
                 // Always four bytes per pixel for sRGBA
                 c.width() * c.height() * 4
-            }
-            egui::ImageData::Font(f) => {
-                f.width()
-                    * f.height()
-                    * match self.font_format {
-                        Format::R8G8_UNORM => 2,
-                        Format::R8G8B8A8_SRGB => 4,
-                        // Exhaustive list of valid font formats
-                        _ => unreachable!(),
-                    }
-            }
+            } // egui::ImageData::Font(f) => {
+              //     f.width()
+              //         * f.height()
+              //         * match self.font_format {
+              //             Format::R8G8_UNORM => 2,
+              //             Format::R8G8B8A8_SRGB => 4,
+              //             // Exhaustive list of valid font formats
+              //             _ => unreachable!(),
+              //         }
+              // }
         }
     }
     /// Write a single texture delta using the provided staging region and commandbuffer
     fn update_texture_within(
         &mut self,
         id: egui::TextureId,
-        delta: &egui::epaint::ImageDelta,
+        delta: &SmallVec<[ImageDelta; 1]>,
         stage: Subbuffer<[u8]>,
         mapped_stage: &mut [u8],
         cbb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ) {
+        let delta = delta.first().unwrap();
         // Extract pixel data from egui, writing into our region of the stage buffer.
         let format = match &delta.image {
             egui::ImageData::Color(image) => {
@@ -415,12 +430,11 @@ impl Renderer {
                 let bytes = image.pixels.iter().flat_map(|color| color.to_array());
                 mapped_stage.iter_mut().zip(bytes).for_each(|(into, from)| *into = from);
                 Format::R8G8B8A8_SRGB
-            }
-            egui::ImageData::Font(image) => {
-                // Dynamically pack based on chosen format
-                self.pack_font_data_into(image, mapped_stage);
-                self.font_format
-            }
+            } // egui::ImageData::Font(image) => {
+              //     // Dynamically pack based on chosen format
+              //     self.pack_font_data_into(image, mapped_stage);
+              //     self.font_format
+              // }
         };
 
         // Copy texture data to existing image if delta pos exists (e.g. font changed)
@@ -481,10 +495,10 @@ impl Renderer {
                 },
                 _ => ComponentMapping::identity(),
             };
-            let view = ImageView::new(img.clone(), ImageViewCreateInfo {
-                component_mapping,
-                ..ImageViewCreateInfo::from_image(&img)
-            })
+            let view = ImageView::new(
+                img.clone(),
+                ImageViewCreateInfo { component_mapping, ..ImageViewCreateInfo::from_image(&img) },
+            )
             .unwrap();
             // Create a descriptor for it
             let layout = self.pipeline.layout().set_layouts().first().unwrap();
@@ -496,7 +510,8 @@ impl Renderer {
         };
     }
     /// Write the entire texture delta for this frame.
-    fn update_textures(&mut self, sets: &[(egui::TextureId, egui::epaint::ImageDelta)]) {
+    fn update_textures(&mut self, sets: &HashMap<egui::TextureId, SmallVec<[ImageDelta; 1]>>) {
+        //fn update_textures(&mut self, sets: &[(egui::TextureId, egui::epaint::ImageDelta)]) {
         // Allocate enough memory to upload every delta at once.
         let total_size_bytes =
             sets.iter().map(|(_, set)| self.image_size_bytes(set)).sum::<usize>() * 4;
@@ -951,10 +966,10 @@ impl Renderer {
                             pixels_per_point: scale_factor,
                             screen_size_px: framebuffer_dimensions,
                         };
-                        (callback_fn.f)(info, &mut CallbackContext {
-                            builder,
-                            resources: self.render_resources(),
-                        });
+                        (callback_fn.f)(
+                            info,
+                            &mut CallbackContext { builder, resources: self.render_resources() },
+                        );
 
                         // The user could have done much here - rebind pipes, set views, bind things, etc.
                         // Mark all state as lost so that next mesh rebinds everything to a known state.
