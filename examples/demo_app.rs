@@ -144,7 +144,7 @@ impl ApplicationHandler for App {
                     //let ctx = gui.context();
                     demo_app.ui(ui);
 
-                    egui::Window::new("Colors").vscroll(true).show(&ui, |ui| {
+                    egui::Window::new("Colors").vscroll(true).show(ui, |ui| {
                         egui_test.ui(ui);
                     });
                 });

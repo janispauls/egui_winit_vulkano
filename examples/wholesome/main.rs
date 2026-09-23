@@ -96,32 +96,34 @@ impl GuiState {
             .resizable(true)
             .vscroll(true)
             .open(show_texture_window1)
-            .show(&ui, |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*image_texture_id1, [
-                    256.0, 256.0,
-                ])));
+            .show(ui, |ui| {
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *image_texture_id1,
+                    [256.0, 256.0],
+                )));
             });
         egui::Window::new("Mah Doge")
             .resizable(true)
             .vscroll(true)
             .open(show_texture_window2)
-            .show(&ui, |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*image_texture_id2, [
-                    300.0, 200.0,
-                ])));
+            .show(ui, |ui| {
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *image_texture_id2,
+                    [300.0, 200.0],
+                )));
             });
         egui::Window::new("Scene").resizable(true).vscroll(true).open(show_scene_window).show(
-            &ui,
+            ui,
             |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*scene_texture_id, [
-                    scene_view_size[0] as f32,
-                    scene_view_size[1] as f32,
-                ])));
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *scene_texture_id,
+                    [scene_view_size[0] as f32, scene_view_size[1] as f32],
+                )));
             },
         );
         egui::Area::new("fps".into())
             .fixed_pos(egui::pos2(window_size[0] - 0.05 * window_size[0], 10.0))
-            .show(&ui, |ui| {
+            .show(ui, |ui| {
                 ui.label(format!("{fps:.2}"));
             });
     }
