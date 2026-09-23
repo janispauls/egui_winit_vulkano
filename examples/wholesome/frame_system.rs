@@ -95,7 +95,7 @@ impl FrameSystem {
         before_future: F,
         final_image: Arc<ImageView>,
         world_to_framebuffer: Matrix4<f32>,
-    ) -> Frame
+    ) -> Frame<'_>
     where
         F: GpuFuture + 'static,
     {
@@ -119,10 +119,13 @@ impl FrameSystem {
             )
             .unwrap();
         }
-        let framebuffer = Framebuffer::new(self.render_pass.clone(), FramebufferCreateInfo {
-            attachments: vec![final_image, self.depth_buffer.clone()],
-            ..Default::default()
-        })
+        let framebuffer = Framebuffer::new(
+            self.render_pass.clone(),
+            FramebufferCreateInfo {
+                attachments: vec![final_image, self.depth_buffer.clone()],
+                ..Default::default()
+            },
+        )
         .unwrap();
         let mut command_buffer_builder = AutoCommandBufferBuilder::primary(
             self.allocators.command_buffers.clone(),
