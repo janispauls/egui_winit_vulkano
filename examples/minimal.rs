@@ -91,8 +91,8 @@ impl ApplicationHandler for App {
                 // Set immediate UI in redraw here
                 // Set immediate UI in redraw here
                 gui.immediate_ui(|gui| {
-                    let ctx = gui.context();
-                    egui::CentralPanel::default().show(&ctx, |ui| {
+                    //let ctx = gui.context();
+                    egui::CentralPanel::default().show(gui, |ui| {
                         ui.vertical_centered(|ui| {
                             ui.add(egui::widgets::Label::new("Hi there!"));
                             sized_text(ui, "Rich Text", 32.0);
@@ -115,7 +115,7 @@ impl ApplicationHandler for App {
                 });
                 // Render UI
                 // Acquire swapchain future
-                match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render gui
                         let after_future = self

@@ -30,5 +30,5 @@ smallvec = "1.16.1"
 
 [dev-dependencies]
 cgmath = "0.18.0"
-egui_demo_lib = "0.31.0"
+egui_demo_lib = "0.36.2"
 vulkano-util = { version = "0.35" }

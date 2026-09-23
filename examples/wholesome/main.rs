@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-use egui::{load::SizedTexture, Context, ImageSource, Visuals};
+use egui::{load::SizedTexture, ImageSource, Visuals};
 use egui_winit_vulkano::{Gui, GuiConfig};
 use vulkano::{
     command_buffer::allocator::{
@@ -72,7 +72,7 @@ impl GuiState {
     }
 
     /// Defines the layout of our UI
-    pub fn layout(&mut self, egui_context: Context, window_size: [f32; 2], fps: f32) {
+    pub fn layout(&mut self, ui: &mut egui::Ui, window_size: [f32; 2], fps: f32) {
         let GuiState {
             show_texture_window1,
             show_texture_window2,
@@ -83,8 +83,8 @@ impl GuiState {
             scene_texture_id,
             ..
         } = self;
-        egui_context.set_visuals(Visuals::dark());
-        egui::SidePanel::left("Side Panel").default_width(150.0).show(&egui_context, |ui| {
+        ui.set_visuals(Visuals::dark());
+        egui::Panel::left("Side Panel").default_size(150.0).show(ui, |ui| {
             ui.heading("Hello Tree");
             ui.separator();
             ui.checkbox(show_texture_window1, "Show Tree");
@@ -96,32 +96,34 @@ impl GuiState {
             .resizable(true)
             .vscroll(true)
             .open(show_texture_window1)
-            .show(&egui_context, |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*image_texture_id1, [
-                    256.0, 256.0,
-                ])));
+            .show(&ui, |ui| {
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *image_texture_id1,
+                    [256.0, 256.0],
+                )));
             });
         egui::Window::new("Mah Doge")
             .resizable(true)
             .vscroll(true)
             .open(show_texture_window2)
-            .show(&egui_context, |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*image_texture_id2, [
-                    300.0, 200.0,
-                ])));
+            .show(&ui, |ui| {
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *image_texture_id2,
+                    [300.0, 200.0],
+                )));
             });
         egui::Window::new("Scene").resizable(true).vscroll(true).open(show_scene_window).show(
-            &egui_context,
+            &ui,
             |ui| {
-                ui.image(ImageSource::Texture(SizedTexture::new(*scene_texture_id, [
-                    scene_view_size[0] as f32,
-                    scene_view_size[1] as f32,
-                ])));
+                ui.image(ImageSource::Texture(SizedTexture::new(
+                    *scene_texture_id,
+                    [scene_view_size[0] as f32, scene_view_size[1] as f32],
+                )));
             },
         );
         egui::Area::new("fps".into())
             .fixed_pos(egui::pos2(window_size[0] - 0.05 * window_size[0], 10.0))
-            .show(&egui_context, |ui| {
+            .show(&ui, |ui| {
                 ui.label(format!("{fps:.2}"));
             });
     }
@@ -249,16 +251,15 @@ impl ApplicationHandler for App {
                     // It's a closure giving access to egui context inside which you can call anything.
                     // Here we're calling the layout of our `gui_state`.
                     gui.immediate_ui(|gui| {
-                        let ctx = gui.context();
                         self.gui_state.as_mut().unwrap().layout(
-                            ctx,
+                            gui,
                             renderer.window_size(),
                             self.time.fps(),
                         )
                     });
                     // Render UI
                     // Acquire swapchain future
-                    match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                    match renderer.acquire(None, |_| {}) {
                         Ok(future) => {
                             // Draw scene
                             let after_scene_draw =

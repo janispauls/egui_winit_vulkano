@@ -108,8 +108,8 @@ impl ApplicationHandler for App {
                 let scene = self.scene.clone().unwrap();
                 // Set immediate UI in redraw here
                 gui.immediate_ui(|gui| {
-                    let ctx = gui.context();
-                    egui::CentralPanel::default().show(&ctx, |ui| {
+                    let scene = scene.clone();
+                    egui::CentralPanel::default().show(gui, |ui| {
                         // Create a frame to render our triangle image in
                         egui::Frame::canvas(ui.style()).fill(Rgba::BLACK.into()).show(ui, |ui| {
                             // Allocate all the space in the frame for the image
@@ -133,7 +133,7 @@ impl ApplicationHandler for App {
                 });
                 // Render UI
                 // Acquire swapchain future
-                match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render gui
                         let after_future =

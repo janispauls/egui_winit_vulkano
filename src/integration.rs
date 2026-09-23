@@ -76,6 +76,7 @@ pub struct Gui {
 
     shapes: Vec<egui::epaint::ClippedShape>,
     textures_delta: egui::TexturesDelta,
+    pending_output: Option<egui::FullOutput>,
 }
 
 impl Gui {
@@ -143,6 +144,7 @@ impl Gui {
             surface,
             shapes: vec![],
             textures_delta: Default::default(),
+            pending_output: None,
         }
     }
 
@@ -169,13 +171,24 @@ impl Gui {
     }
 
     /// Begins Egui frame & determines what will be drawn later. This must be called before draw, and after `update` (winit event).
-    pub fn immediate_ui(&mut self, layout_function: impl FnOnce(&mut Self)) {
-        let raw_input = self.egui_winit.take_egui_input(surface_window(&self.surface));
-        self.egui_ctx.begin_pass(raw_input);
-        // Render Egui
-        layout_function(self);
-    }
+    // pub fn immediate_ui(&mut self, layout_function: impl FnOnce(&mut Self)) {
+    //     self.egui_ctx.begin_pass(raw_input);
+    //     // Render Egui
+    //     layout_function(self);
+    // }
 
+    pub fn immediate_ui(&mut self, layout_function: impl FnMut(&mut egui::Ui)) {
+        let raw_input = self.egui_winit.take_egui_input(surface_window(&self.surface));
+        let full_output = self.egui_ctx.run_ui(raw_input, layout_function);
+        match &mut self.pending_output {
+            Some(pending) => {
+                pending.append(full_output);
+            }
+            None => {
+                self.pending_output = Some(full_output);
+            }
+        }
+    }
     /// If you wish to better control when to begin frame, do so by calling this function
     /// (Finish by drawing)
     pub fn begin_frame(&mut self) {
@@ -202,15 +215,18 @@ impl Gui {
             )
         }
 
-        let (clipped_meshes, textures_delta) = self.extract_draw_data_at_frame_end();
+        let (clipped_meshes, mut textures_delta) = self.extract_draw_data_at_frame_end();
 
-        self.renderer.draw_on_image(
+        let future = self.renderer.draw_on_image(
             &clipped_meshes,
             &textures_delta,
             self.pixels_per_point(),
             before_future,
             final_image,
-        )
+        );
+        textures_delta.clear();
+
+        future
     }
 
     /// Creates commands for rendering ui on subpass' image and returns the command buffer for execution on your side
@@ -227,36 +243,33 @@ impl Gui {
             )
         }
 
-        let (clipped_meshes, textures_delta) = self.extract_draw_data_at_frame_end();
+        let (clipped_meshes, mut textures_delta) = self.extract_draw_data_at_frame_end();
 
-        self.renderer.draw_on_subpass_image(
+        let future = self.renderer.draw_on_subpass_image(
             &clipped_meshes,
             &textures_delta,
             self.pixels_per_point(),
             image_dimensions,
-        )
+        );
+        textures_delta.clear();
+        future
     }
 
     fn extract_draw_data_at_frame_end(&mut self) -> (Vec<ClippedPrimitive>, TexturesDelta) {
-        self.end_frame();
-        let shapes = std::mem::take(&mut self.shapes);
-        let textures_delta = std::mem::take(&mut self.textures_delta);
-        let clipped_meshes = self.egui_ctx.tessellate(shapes, self.pixels_per_point());
-        (clipped_meshes, textures_delta)
-    }
-
-    fn end_frame(&mut self) {
+        let Some(full_output) = self.pending_output.take() else {
+            return (Vec::new(), TexturesDelta::default());
+        };
         let egui::FullOutput {
             platform_output,
             textures_delta,
             shapes,
             pixels_per_point: _,
             viewport_output: _,
-        } = self.egui_ctx.end_pass();
+        } = full_output;
 
         self.egui_winit.handle_platform_output(surface_window(&self.surface), platform_output);
-        self.shapes = shapes;
-        self.textures_delta = textures_delta;
+        let clipped_meshes = self.egui_ctx.tessellate(shapes, self.pixels_per_point());
+        (clipped_meshes, textures_delta)
     }
 
     /// Registers a user image from Vulkano image view to be used by egui

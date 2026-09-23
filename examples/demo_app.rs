@@ -140,11 +140,11 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 // Set immediate UI in redraw here
-                gui.immediate_ui(|gui| {
-                    let ctx = gui.context();
-                    demo_app.ui(&ctx);
+                gui.immediate_ui(|ui| {
+                    //let ctx = gui.context();
+                    demo_app.ui(ui);
 
-                    egui::Window::new("Colors").vscroll(true).show(&ctx, |ui| {
+                    egui::Window::new("Colors").vscroll(true).show(&ui, |ui| {
                         egui_test.ui(ui);
                     });
                 });
@@ -155,7 +155,7 @@ impl ApplicationHandler for App {
 
                 // Render UI
                 // Acquire swapchain future
-                match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         let after_future =
                             gui.draw_on_image(future, renderer.swapchain_image_view());

@@ -124,7 +124,6 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 // Set immediate UI in redraw here
                 gui.immediate_ui(|gui| {
-                    let ctx = gui.context();
                     Window::new("Transparent Window")
                         .anchor(Align2([Align::RIGHT, Align::TOP]), vec2(-545.0, 500.0))
                         .resizable(false)
@@ -141,13 +140,13 @@ impl ApplicationHandler for App {
                                 .corner_radius(CornerRadius::same(5))
                                 .inner_margin(Margin::same(10)),
                         )
-                        .show(&ctx, |ui| {
+                        .show(gui, |ui| {
                             ui.colored_label(Color32::BLACK, "Content :)");
                         });
                 });
                 // Render
                 // Acquire swapchain future
-                match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render
                         let after_future = self.pipeline.as_mut().unwrap().render(
@@ -325,24 +324,28 @@ impl MSAAPipeline {
 
         let subpass = Subpass::from(render_pass, 0).unwrap();
         (
-            GraphicsPipeline::new(device.clone(), None, GraphicsPipelineCreateInfo {
-                stages: stages.into_iter().collect(),
-                vertex_input_state: Some(vertex_input_state),
-                input_assembly_state: Some(InputAssemblyState::default()),
-                viewport_state: Some(ViewportState::default()),
-                rasterization_state: Some(RasterizationState::default()),
-                multisample_state: Some(MultisampleState {
-                    rasterization_samples: subpass.num_samples().unwrap(),
-                    ..MultisampleState::default()
-                }),
-                color_blend_state: Some(ColorBlendState::with_attachment_states(
-                    subpass.num_color_attachments(),
-                    ColorBlendAttachmentState::default(),
-                )),
-                dynamic_state: [DynamicState::Viewport].into_iter().collect(),
-                subpass: Some(subpass.clone().into()),
-                ..GraphicsPipelineCreateInfo::layout(layout)
-            })
+            GraphicsPipeline::new(
+                device.clone(),
+                None,
+                GraphicsPipelineCreateInfo {
+                    stages: stages.into_iter().collect(),
+                    vertex_input_state: Some(vertex_input_state),
+                    input_assembly_state: Some(InputAssemblyState::default()),
+                    viewport_state: Some(ViewportState::default()),
+                    rasterization_state: Some(RasterizationState::default()),
+                    multisample_state: Some(MultisampleState {
+                        rasterization_samples: subpass.num_samples().unwrap(),
+                        ..MultisampleState::default()
+                    }),
+                    color_blend_state: Some(ColorBlendState::with_attachment_states(
+                        subpass.num_color_attachments(),
+                        ColorBlendAttachmentState::default(),
+                    )),
+                    dynamic_state: [DynamicState::Viewport].into_iter().collect(),
+                    subpass: Some(subpass.clone().into()),
+                    ..GraphicsPipelineCreateInfo::layout(layout)
+                },
+            )
             .unwrap(),
             subpass,
         )
@@ -383,10 +386,13 @@ impl MSAAPipeline {
             .unwrap();
         }
 
-        let framebuffer = Framebuffer::new(self.render_pass.clone(), FramebufferCreateInfo {
-            attachments: vec![self.intermediary.clone(), image],
-            ..Default::default()
-        })
+        let framebuffer = Framebuffer::new(
+            self.render_pass.clone(),
+            FramebufferCreateInfo {
+                attachments: vec![self.intermediary.clone(), image],
+                ..Default::default()
+            },
+        )
         .unwrap();
 
         // Begin render pipeline commands
