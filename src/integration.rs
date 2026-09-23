@@ -73,9 +73,6 @@ pub struct Gui {
     pub egui_winit: egui_winit::State,
     renderer: Renderer,
     surface: Arc<Surface>,
-
-    shapes: Vec<egui::epaint::ClippedShape>,
-    textures_delta: egui::TexturesDelta,
     pending_output: Option<egui::FullOutput>,
 }
 
@@ -137,15 +134,7 @@ impl Gui {
             Some(theme),
             Some(max_texture_side),
         );
-        Gui {
-            egui_ctx,
-            egui_winit,
-            renderer,
-            surface,
-            shapes: vec![],
-            textures_delta: Default::default(),
-            pending_output: None,
-        }
+        Gui { egui_ctx, egui_winit, renderer, surface, pending_output: None }
     }
 
     /// Returns the pixels per point of the window of this gui.
@@ -155,7 +144,7 @@ impl Gui {
 
     /// Returns a set of resources used to construct the render pipeline. These can be reused
     /// to create additional pipelines and buffers to be rendered in a `PaintCallback`.
-    pub fn render_resources(&self) -> RenderResources {
+    pub fn render_resources(&self) -> RenderResources<'_> {
         self.renderer.render_resources()
     }
 
@@ -169,13 +158,6 @@ impl Gui {
     pub fn update(&mut self, winit_event: &winit::event::WindowEvent) -> bool {
         self.egui_winit.on_window_event(surface_window(&self.surface), winit_event).consumed
     }
-
-    /// Begins Egui frame & determines what will be drawn later. This must be called before draw, and after `update` (winit event).
-    // pub fn immediate_ui(&mut self, layout_function: impl FnOnce(&mut Self)) {
-    //     self.egui_ctx.begin_pass(raw_input);
-    //     // Render Egui
-    //     layout_function(self);
-    // }
 
     pub fn immediate_ui(&mut self, layout_function: impl FnMut(&mut egui::Ui)) {
         let raw_input = self.egui_winit.take_egui_input(surface_window(&self.surface));
