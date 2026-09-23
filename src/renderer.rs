@@ -445,7 +445,7 @@ impl Renderer {
         //fn update_textures(&mut self, sets: &[(egui::TextureId, egui::epaint::ImageDelta)]) {
         // Allocate enough memory to upload every delta at once.
         let total_size_bytes =
-            sets.iter().map(|(_, set)| self.image_size_bytes(set)).sum::<usize>() * 4;
+            sets.values().map(|set| self.image_size_bytes(set)).sum::<usize>() * 4;
         // Infallible - unless we're on a 128 bit machine? :P
         let total_size_bytes = u64::try_from(total_size_bytes).unwrap();
         let Ok(total_size_bytes) = vulkano::NonZeroDeviceSize::try_from(total_size_bytes) else {
