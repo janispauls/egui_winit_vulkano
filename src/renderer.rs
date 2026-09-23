@@ -336,8 +336,8 @@ impl Renderer {
         self.texture_images.remove(&texture_id);
     }
 
-    fn image_size_bytes(&self, delta: &SmallVec<[ImageDelta; 1]>) -> usize {
-        match &delta.first().unwrap().image {
+    fn image_size_bytes(&self, delta: &ImageDelta) -> usize {
+        match &delta.image {
             egui::ImageData::Color(c) => {
                 // Always four bytes per pixel for sRGBA
                 c.width() * c.height() * 4
@@ -348,12 +348,11 @@ impl Renderer {
     fn update_texture_within(
         &mut self,
         id: egui::TextureId,
-        delta: &SmallVec<[ImageDelta; 1]>,
+        delta: &ImageDelta,
         stage: Subbuffer<[u8]>,
         mapped_stage: &mut [u8],
         cbb: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ) {
-        let delta = delta.first().unwrap();
         // Extract pixel data from egui, writing into our region of the stage buffer.
         let format = match &delta.image {
             egui::ImageData::Color(image) => {
@@ -442,10 +441,13 @@ impl Renderer {
     }
     /// Write the entire texture delta for this frame.
     fn update_textures(&mut self, sets: &HashMap<egui::TextureId, SmallVec<[ImageDelta; 1]>>) {
-        //fn update_textures(&mut self, sets: &[(egui::TextureId, egui::epaint::ImageDelta)]) {
         // Allocate enough memory to upload every delta at once.
-        let total_size_bytes =
-            sets.values().map(|set| self.image_size_bytes(set)).sum::<usize>() * 4;
+        let total_size_bytes = sets
+            .values()
+            .flat_map(|deltas| deltas.iter())
+            .map(|delta| self.image_size_bytes(delta))
+            .sum::<usize>()
+            * 4;
         // Infallible - unless we're on a 128 bit machine? :P
         let total_size_bytes = u64::try_from(total_size_bytes).unwrap();
         let Ok(total_size_bytes) = vulkano::NonZeroDeviceSize::try_from(total_size_bytes) else {
@@ -482,18 +484,22 @@ impl Renderer {
             // Keep track of where to write the next image to into the staging buffer.
             let mut past_buffer_end = 0usize;
 
-            for (id, delta) in sets {
-                let image_size_bytes = self.image_size_bytes(delta);
-                let range = past_buffer_end..(image_size_bytes + past_buffer_end);
+            for (id, deltas) in sets {
+                // Deltas for a given texture must be applied in order (e.g. multiple partial
+                // updates to the same texture within a single frame).
+                for delta in deltas {
+                    let image_size_bytes = self.image_size_bytes(delta);
+                    let range = past_buffer_end..(image_size_bytes + past_buffer_end);
 
-                // Bump for next loop
-                past_buffer_end += image_size_bytes;
+                    // Bump for next loop
+                    past_buffer_end += image_size_bytes;
 
-                // Represents the same memory in two ways. Writable memmap, and gpu-side description.
-                let stage = buffer.clone().slice(range.start as u64..range.end as u64);
-                let mapped_stage = &mut writer[range];
+                    // Represents the same memory in two ways. Writable memmap, and gpu-side description.
+                    let stage = buffer.clone().slice(range.start as u64..range.end as u64);
+                    let mapped_stage = &mut writer[range];
 
-                self.update_texture_within(*id, delta, stage, mapped_stage, &mut cbb);
+                    self.update_texture_within(*id, delta, stage, mapped_stage, &mut cbb);
+                }
             }
         }
 
